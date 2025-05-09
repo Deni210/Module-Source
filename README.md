@@ -17,8 +17,8 @@ If you stick with the file method:
 # Contributions Welcome
 If you find any bugs and you know how to fix them, feel free to open a pull request and i'll make sure to merge it if everything checks out.
 functions that don't pass sUNC:
-- gethiddenproperty – returns an empty string for SharedString
-- getrunningscripts – doesn’t return scripts inside Actors
+- gethiddenproperty – returns nothing for type SharedString
+- getrunningscripts – doesn't return scripts inside Actors
 - getloadedmodules – same issue as above, misses scripts in Actors
 - WebSocket.Connect – no TLS support
 - getcustomasset – doesn't load .mp3 files
