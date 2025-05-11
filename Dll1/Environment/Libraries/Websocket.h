@@ -194,7 +194,7 @@ namespace Websocket {
                 }
             }
             catch (const std::exception& e) {
-                std::cerr << "Error setting up TLS connection: " << e.what() << std::endl;
+                std::cerr << "Error setting up TLS: " << e.what() << std::endl;
                 return false;
             }
 
