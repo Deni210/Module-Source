@@ -9,9 +9,13 @@
 #include <chrono>
 #include <memory>
 #include <stdexcept>
+#include <asio.hpp>
+#include <openssl/ssl.h>
+#include <openssl/err.h>
 #include "../../Dependencies/easywsclient/easywsclient.hpp"
 
 using easywsclient::WebSocket;
+namespace asio = boost::asio;
 
 namespace Websocket {
     class exploit_websocket {
@@ -25,6 +29,11 @@ namespace Websocket {
         int onMessageRef;
         int onCloseRef;
         int threadRef;
+
+        asio::io_context io_context;
+        asio::ip::tcp::socket socket;
+        SSL_CTX* ssl_ctx = nullptr;
+        SSL* ssl = nullptr;
 
         void pollMessages() {
             while (running) {
@@ -137,13 +146,58 @@ namespace Websocket {
         bool reconnect(const std::string& url) {
             constexpr int maxRetries = 5;
             for (int i = 0; i < maxRetries; ++i) {
-                webSocket = WebSocket::from_url(url);
-                if (webSocket && webSocket->getReadyState() == WebSocket::OPEN) {
-                    return true;
+                if (url.find("wss://") == 0) {
+                    if (setupTLSConnection(url)) {
+                        return true;
+                    }
+                }
+                else {
+                    webSocket = WebSocket::from_url(url);
+                    if (webSocket && webSocket->getReadyState() == WebSocket::OPEN) {
+                        return true;
+                    }
                 }
 
                 std::this_thread::sleep_for(std::chrono::milliseconds(1000));
             }
+            return false;
+        }
+
+        bool setupTLSConnection(const std::string& url) {
+            SSL_library_init();
+            OpenSSL_add_all_algorithms();
+            SSL_load_error_strings();
+
+            ssl_ctx = SSL_CTX_new(SSLv23_client_method());
+            if (!ssl_ctx) {
+                return false;
+            }
+
+            try {
+                asio::ip::tcp::resolver resolver(io_context);
+                auto endpoints = resolver.resolve("wss://localhost", "443");
+                socket.connect(*endpoints.begin());
+
+                ssl = SSL_new(ssl_ctx);
+                SSL_set_fd(ssl, socket.native_handle());
+                if (SSL_connect(ssl) == -1) {
+                    ERR_print_errors_fp(stderr);
+                    return false;
+                }
+
+                webSocket = WebSocket::from_url(url, [&socket, &ssl](const std::string& msg) {
+                    SSL_write(ssl, msg.c_str(), msg.size());
+                });
+
+                if (webSocket && webSocket->getReadyState() == WebSocket::OPEN) {
+                    return true;
+                }
+            }
+            catch (const std::exception& e) {
+                std::cerr << "Error setting up TLS: " << e.what() << std::endl;
+                return false;
+            }
+
             return false;
         }
     };
